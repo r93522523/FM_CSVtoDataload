@@ -12,6 +12,7 @@ username = 'familymart-tw-test'
 render_folder = r'/mnt/data'
 key_path = os.path.join(render_folder, 'familymart-tw-test.key')
 
+ELS_COMM_KEY = "abcde12345"
 @app.route('/upload_toFTP', methods=['POST'])
 def upload_file():
     try:
@@ -22,30 +23,34 @@ def upload_file():
         if file.filename == '':
             return 'No selected file'
         if file:
-            render_path = os.path.join(render_folder, file.filename)
-            file.save(render_path)
-            
-            done_folder = os.path.join(render_folder, 'done')
-            os.makedirs(done_folder, exist_ok=True)
-            done_path = os.path.join(done_folder, file.filename)
-            shutil.copy(render_path, done_path)
+            auth_key = request.headers.get('ELSCommKey')
+            if auth_key != ELS_COMM_KEY:
+                return jsonify({'error': 'Unauthorized'}), 401
+            else:
+                render_path = os.path.join(render_folder, file.filename)
+                file.save(render_path)
+                
+                done_folder = os.path.join(render_folder, 'done')
+                os.makedirs(done_folder, exist_ok=True)
+                done_path = os.path.join(done_folder, file.filename)
+                shutil.copy(render_path, done_path)
 
-            FTP_path = f'/APItest/{file.filename}'
+                FTP_path = f'/APItest/{file.filename}'
 
-            private_key = paramiko.RSAKey.from_private_key_file(key_path)
-            transport = paramiko.Transport((hostname, port))
-            transport.connect(username=username, pkey=private_key)
-            sftp = paramiko.SFTPClient.from_transport(transport)
+                private_key = paramiko.RSAKey.from_private_key_file(key_path)
+                transport = paramiko.Transport((hostname, port))
+                transport.connect(username=username, pkey=private_key)
+                sftp = paramiko.SFTPClient.from_transport(transport)
 
-            sftp.put(render_path, FTP_path)
-            sftp.close()
-            transport.close()
+                sftp.put(render_path, FTP_path)
+                sftp.close()
+                transport.close()
 
-            os.remove(render_path)
+                os.remove(render_path)
 
-            return jsonify({'message': 'File uploaded successfully'}), 200
+                return jsonify({'message': 'File uploaded successfully'}), 200
         else:
-            return jsonify({'error': 'No CSV file found'}), 400
+            return jsonify({'error': 'CSV format is required'}), 400
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
